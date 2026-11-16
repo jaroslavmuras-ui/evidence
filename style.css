@@ -121,6 +121,167 @@ body {
   margin: 0;
 }
 
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+
+.item-row.is-sold {
+  opacity: 0.6;
+}
+
+.item-main {
+  min-width: 0;
+}
+
+.item-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.item-result {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: #e8efff;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.badge-sold {
+  color: var(--text-muted);
+  background: #eceff3;
+}
+
+/* ---------- Formuláře ---------- */
+
+.page-title {
+  margin: 0 0 16px;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 16px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-row {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .field-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.field input,
+.field textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid #cdd5df;
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.error {
+  color: var(--negative);
+  font-size: 0.875rem;
+}
+
+.error:empty {
+  display: none;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Dialog ---------- */
+
+.dialog {
+  border: none;
+  border-radius: var(--radius);
+  padding: 20px;
+  width: min(420px, calc(100vw - 32px));
+  color: var(--text);
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.2);
+}
+
+.dialog::backdrop {
+  background: rgba(16, 24, 40, 0.45);
+}
+
+.dialog h3 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+}
+
+.dialog p {
+  margin: 0 0 20px;
+}
+
 /* ---------- Tlačítka ---------- */
 
 .btn {
@@ -140,6 +301,15 @@ body {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: #eceff3;
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: #e1e5eb;
 }
 
 .btn:focus-visible {
