@@ -80,7 +80,9 @@ function render() {
   const route = location.hash.replace(/^#/, '') || '/';
   let match;
   if (route === '/pridat') renderAddItem();
-  else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam$/))) renderAddEntry(decodeURIComponent(match[1]));
+  else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam$/))) renderEntryForm(decodeURIComponent(match[1]));
+  else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam\/([^/]+)$/))) renderEntryForm(decodeURIComponent(match[1]), decodeURIComponent(match[2]));
+  else if ((match = route.match(/^\/vec\/([^/]+)\/upravit$/))) renderEditItem(decodeURIComponent(match[1]));
   else if ((match = route.match(/^\/vec\/([^/]+)$/))) renderDetail(decodeURIComponent(match[1]));
   else renderOverview();
   window.scrollTo(0, 0);
@@ -173,16 +175,24 @@ function renderNotFound() {
 
 const ENTRY_LABELS = { nakup: 'Nákup', vydaj: 'Výdaj', prijem: 'Příjem', prodej: 'Prodej' };
 
-function renderEntryRow(entry) {
+// Jen tyto záznamy jde upravovat a mazat (nákup je neměnný).
+const EDITABLE_TYPES = ['vydaj', 'prijem'];
+
+function renderEntryRow(entry, editable) {
   const isExpense = EXPENSE_TYPES.includes(entry.type);
   const amount = isExpense ? -entry.amount : entry.amount;
   return `
     <li class="entry-row">
-      <div>
+      <div class="entry-info">
         <div class="entry-type">${ENTRY_LABELS[entry.type] || entry.type}${entry.source ? `<span class="entry-source"> · ${escapeHtml(entry.source)}</span>` : ''}</div>
         <div class="entry-date">${formatDate(entry.date)}</div>
       </div>
       <div class="entry-amount ${resultClass(amount)}">${formatKc(amount, { signed: true })}</div>
+      ${editable && EDITABLE_TYPES.includes(entry.type) ? `
+        <div class="entry-actions">
+          <button type="button" class="btn-link" data-edit="${escapeHtml(entry.id)}">Upravit</button>
+          <button type="button" class="btn-link btn-link-danger" data-delete="${escapeHtml(entry.id)}">Smazat</button>
+        </div>` : ''}
     </li>
   `;
 }
@@ -192,6 +202,7 @@ function renderDetail(id) {
   if (!item) return renderNotFound();
 
   const totals = computeTotals(item.entries);
+  const owned = item.status === 'owned';
   // Nejnovější nahoře; při stejném datu později přidaný výš.
   const history = item.entries
     .map((entry, index) => ({ entry, index }))
@@ -206,48 +217,90 @@ function renderDetail(id) {
     </div>
     ${item.note ? `<p class="detail-note">${escapeHtml(item.note)}</p>` : ''}
     ${renderSummary(totals, 'Souhrn věci')}
+    ${owned ? `
+      <div class="detail-actions">
+        <button type="button" class="btn btn-secondary" id="btn-edit-item">Upravit věc</button>
+      </div>` : ''}
     <div class="section-head">
       <h2>Historie</h2>
-      ${item.status === 'owned' ? '<button type="button" class="btn btn-primary" id="btn-add-entry">+ Přidat záznam</button>' : ''}
+      ${owned ? '<button type="button" class="btn btn-primary" id="btn-add-entry">+ Přidat záznam</button>' : ''}
     </div>
-    <ul class="entry-list">${history.map(renderEntryRow).join('')}</ul>
+    <ul class="entry-list">${history.map((e) => renderEntryRow(e, owned)).join('')}</ul>
   `;
 
-  const addBtn = document.getElementById('btn-add-entry');
-  if (addBtn) addBtn.addEventListener('click', () => navigate(itemHash(item.id, '/zaznam')));
+  if (!owned) return;
+
+  document.getElementById('btn-add-entry').addEventListener('click', () => navigate(itemHash(item.id, '/zaznam')));
+  document.getElementById('btn-edit-item').addEventListener('click', () => navigate(itemHash(item.id, '/upravit')));
+
+  app.querySelectorAll('[data-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => navigate(itemHash(item.id, '/zaznam/' + encodeURIComponent(btn.dataset.edit))));
+  });
+
+  app.querySelectorAll('[data-delete]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const entry = item.entries.find((e) => e.id === btn.dataset.delete);
+      if (!entry) return;
+      const label = ENTRY_LABELS[entry.type].toLowerCase();
+      confirmDialog({
+        title: 'Smazat záznam?',
+        message: `Opravdu smazat ${label} <strong>${formatKc(entry.amount)}</strong> ze dne ${formatDate(entry.date)}${entry.source ? ` (${escapeHtml(entry.source)})` : ''}?`,
+        confirmText: 'Smazat',
+        cancelText: 'Ponechat',
+        danger: true,
+      }).then((ok) => {
+        if (!ok) return;
+        try {
+          DataStore.deleteEntry(item.id, entry.id);
+        } catch (err) {
+          console.error(err);
+          alert('Záznam se nepodařilo smazat.');
+        }
+        render();
+      });
+    });
+  });
 }
 
-// ---------- Obrazovka: Přidat záznam ----------
+// ---------- Obrazovka: Přidat / upravit záznam ----------
 
-function renderAddEntry(id) {
+function renderEntryForm(id, entryId) {
   const item = DataStore.getItem(id);
   if (!item) return renderNotFound();
   if (item.status !== 'owned') return navigate(itemHash(id));
 
+  // Úprava existujícího záznamu, nebo nový záznam.
+  let entry = null;
+  if (entryId) {
+    entry = item.entries.find((e) => e.id === entryId);
+    if (!entry || !EDITABLE_TYPES.includes(entry.type)) return navigate(itemHash(id));
+  }
+  const type = entry ? entry.type : 'vydaj';
+
   app.innerHTML = `
     <a class="back-link" href="${itemHash(item.id)}">← ${escapeHtml(item.name)}</a>
-    <h2 class="page-title">Přidat záznam</h2>
+    <h2 class="page-title">${entry ? 'Upravit záznam' : 'Přidat záznam'}</h2>
     <form id="entry-form" class="card form" novalidate>
       <fieldset class="field segmented">
         <legend>Typ *</legend>
-        <label><input type="radio" name="type" value="vydaj" checked><span>Výdaj</span></label>
-        <label><input type="radio" name="type" value="prijem"><span>Příjem</span></label>
+        <label><input type="radio" name="type" value="vydaj"${type === 'vydaj' ? ' checked' : ''}><span>Výdaj</span></label>
+        <label><input type="radio" name="type" value="prijem"${type === 'prijem' ? ' checked' : ''}><span>Příjem</span></label>
       </fieldset>
       <div class="field-row">
         <div class="field">
           <label for="f-date">Datum *</label>
-          <input id="f-date" type="date" value="${todayIso()}" max="${todayIso()}">
+          <input id="f-date" type="date" value="${entry ? entry.date : todayIso()}" max="${todayIso()}">
           <div class="error" data-for="date"></div>
         </div>
         <div class="field">
           <label for="f-amount">Částka (Kč) *</label>
-          <input id="f-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="např. 800">
+          <input id="f-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="např. 800" value="${entry ? entry.amount : ''}">
           <div class="error" data-for="amount"></div>
         </div>
       </div>
       <div class="field">
         <label for="f-source">Zdroj</label>
-        <input id="f-source" type="text" maxlength="100" autocomplete="off" list="source-list" placeholder="např. oprava, pronájem">
+        <input id="f-source" type="text" maxlength="100" autocomplete="off" list="source-list" placeholder="např. oprava, pronájem" value="${entry ? escapeHtml(entry.source || '') : ''}">
         <datalist id="source-list">
           ${DataStore.getSources().map((s) => `<option value="${escapeHtml(s)}"></option>`).join('')}
         </datalist>
@@ -284,7 +337,8 @@ function renderAddEntry(id) {
     if (Object.keys(errors).length > 0) return;
 
     try {
-      DataStore.addEntry(item.id, values);
+      if (entry) DataStore.updateEntry(item.id, entry.id, values);
+      else DataStore.addEntry(item.id, values);
     } catch (err) {
       console.error(err);
       alert('Záznam se nepodařilo uložit. Zkus to prosím znovu.');
@@ -373,9 +427,61 @@ function renderAddItem() {
   });
 }
 
+// ---------- Obrazovka: Upravit věc ----------
+
+function renderEditItem(id) {
+  const item = DataStore.getItem(id);
+  if (!item) return renderNotFound();
+  if (item.status !== 'owned') return navigate(itemHash(id));
+  const purchase = item.entries.find((e) => e.type === 'nakup');
+
+  app.innerHTML = `
+    <a class="back-link" href="${itemHash(item.id)}">← ${escapeHtml(item.name)}</a>
+    <h2 class="page-title">Upravit věc</h2>
+    <form id="item-form" class="card form" novalidate>
+      <div class="field">
+        <label for="f-name">Název *</label>
+        <input id="f-name" type="text" maxlength="100" autocomplete="off" value="${escapeHtml(item.name)}">
+        <div class="error" data-for="name"></div>
+      </div>
+      <div class="field">
+        <label for="f-note">Poznámka</label>
+        <textarea id="f-note" rows="2" maxlength="500">${escapeHtml(item.note || '')}</textarea>
+      </div>
+      ${purchase ? `
+        <p class="form-hint">Nákup ${formatDate(purchase.date)} za ${formatKc(purchase.amount)} už nejde změnit.</p>` : ''}
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="btn-cancel">Zrušit</button>
+        <button type="submit" class="btn btn-primary">Uložit</button>
+      </div>
+    </form>
+  `;
+
+  const form = document.getElementById('item-form');
+  document.getElementById('btn-cancel').addEventListener('click', () => navigate(itemHash(item.id)));
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('f-name').value.trim();
+    const note = document.getElementById('f-note').value.trim();
+    const error = form.querySelector('[data-for="name"]');
+    error.textContent = name ? '' : 'Vyplň název.';
+    if (!name) return;
+
+    try {
+      DataStore.updateItem(item.id, { name, note });
+    } catch (err) {
+      console.error(err);
+      alert('Změny se nepodařilo uložit. Zkus to prosím znovu.');
+      return;
+    }
+    navigate(itemHash(item.id));
+  });
+}
+
 // ---------- Potvrzovací okno ----------
 
-function confirmDialog({ title, message, confirmText, cancelText }) {
+function confirmDialog({ title, message, confirmText, cancelText, danger = false }) {
   return new Promise((resolve) => {
     const dialog = document.createElement('dialog');
     dialog.className = 'dialog';
@@ -384,7 +490,7 @@ function confirmDialog({ title, message, confirmText, cancelText }) {
       <p>${message}</p>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" data-answer="no">${escapeHtml(cancelText)}</button>
-        <button type="button" class="btn btn-primary" data-answer="yes">${escapeHtml(confirmText)}</button>
+        <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-answer="yes">${escapeHtml(confirmText)}</button>
       </div>
     `;
     document.body.appendChild(dialog);

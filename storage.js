@@ -42,6 +42,16 @@ const DataStore = (() => {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
+  function findEditableEntry(data, itemId, entryId) {
+    const item = data.items.find((i) => i.id === itemId);
+    if (!item) throw new Error('Věc nenalezena');
+    if (item.status !== 'owned') throw new Error('Záznamy prodané věci nejde měnit');
+    const entry = item.entries.find((e) => e.id === entryId);
+    if (!entry) throw new Error('Záznam nenalezen');
+    if (!['vydaj', 'prijem'].includes(entry.type)) throw new Error('Tento záznam nejde měnit');
+    return { item, entry };
+  }
+
   return {
     // Vrátí všechny věci včetně jejich záznamů.
     getItems() {
@@ -93,6 +103,36 @@ const DataStore = (() => {
       item.entries.push(entry);
       save(data);
       return entry;
+    },
+
+    // Změní název a poznámku věci (nákup se měnit nedá).
+    updateItem(itemId, { name, note }) {
+      const data = load();
+      const item = data.items.find((i) => i.id === itemId);
+      if (!item) throw new Error('Věc nenalezena');
+      if (item.status !== 'owned') throw new Error('Prodanou věc nejde upravit');
+      item.name = name;
+      item.note = note || '';
+      save(data);
+      return item;
+    },
+
+    // Upraví výdaj nebo příjem. Nákup a prodej upravit nejde.
+    updateEntry(itemId, entryId, { type, date, amount, source }) {
+      const data = load();
+      const { item, entry } = findEditableEntry(data, itemId, entryId);
+      if (!['vydaj', 'prijem'].includes(type)) throw new Error('Neplatný typ záznamu');
+      Object.assign(entry, { type, date, amount, source: source || '' });
+      save(data);
+      return entry;
+    },
+
+    // Smaže výdaj nebo příjem. Nákup a prodej smazat nejde.
+    deleteEntry(itemId, entryId) {
+      const data = load();
+      const { item, entry } = findEditableEntry(data, itemId, entryId);
+      item.entries = item.entries.filter((e) => e !== entry);
+      save(data);
     },
   };
 })();
