@@ -42,6 +42,42 @@ const DataStore = (() => {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
+  // Kolik dní musí uplynout od prodeje, než jde věc smazat.
+  const DELETE_AFTER_DAYS = 30;
+
+  // Počet dní mezi dvěma daty 'RRRR-MM-DD' (bez vlivu časových pásem).
+  function daysBetween(fromIso, toIso) {
+    const toUtc = (iso) => {
+      const [y, m, d] = iso.split('-').map(Number);
+      return Date.UTC(y, m - 1, d);
+    };
+    return Math.round((toUtc(toIso) - toUtc(fromIso)) / 86400000);
+  }
+
+  function localTodayIso() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function saleOf(item) {
+    return item.entries.find((e) => e.type === 'prodej') || null;
+  }
+
+  // Datum 'RRRR-MM-DD', od kterého jde věc smazat (null u neprodané věci).
+  function deletableFrom(item) {
+    const sale = item.status === 'sold' ? saleOf(item) : null;
+    if (!sale) return null;
+    const [y, m, d] = sale.date.split('-').map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d + DELETE_AFTER_DAYS));
+    return date.toISOString().slice(0, 10);
+  }
+
+  function canDelete(item) {
+    const sale = item.status === 'sold' ? saleOf(item) : null;
+    return !!sale && daysBetween(sale.date, localTodayIso()) >= DELETE_AFTER_DAYS;
+  }
+
   function findEditableEntry(data, itemId, entryId) {
     const item = data.items.find((i) => i.id === itemId);
     if (!item) throw new Error('Věc nenalezena');
@@ -149,6 +185,22 @@ const DataStore = (() => {
       item.status = 'owned';
       save(data);
       return item;
+    },
+
+    // Pravidla mazání (věc jde smazat až 30 dní po prodeji).
+    canDelete,
+    deletableFrom,
+
+    // Smaže věci i s historií. Smaže jen ty, které už smazat jde; vrátí jejich počet.
+    deleteItems(itemIds) {
+      const data = load();
+      const ids = new Set(itemIds);
+      const blocked = data.items.filter((i) => ids.has(i.id) && !canDelete(i));
+      if (blocked.length > 0) throw new Error('Některé věci zatím nejde smazat');
+      const before = data.items.length;
+      data.items = data.items.filter((i) => !ids.has(i.id));
+      save(data);
+      return before - data.items.length;
     },
 
     // Smaže výdaj nebo příjem. Nákup a prodej smazat nejde.

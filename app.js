@@ -80,6 +80,7 @@ function render() {
   const route = location.hash.replace(/^#/, '') || '/';
   let match;
   if (route === '/pridat') renderAddItem();
+  else if (route === '/smazat-prodeje') renderCleanup();
   else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam$/))) renderEntryForm(decodeURIComponent(match[1]));
   else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam\/([^/]+)$/))) renderEntryForm(decodeURIComponent(match[1]), decodeURIComponent(match[2]));
   else if ((match = route.match(/^\/vec\/([^/]+)\/upravit$/))) renderEditItem(decodeURIComponent(match[1]));
@@ -148,6 +149,8 @@ function renderOverview() {
   const items = DataStore.getItems();
   const totals = computeTotals(allEntries(items));
 
+  const deletableCount = items.filter(DataStore.canDelete).length;
+
   app.innerHTML = `
     ${renderSummary(totals)}
     <div class="section-head">
@@ -155,9 +158,15 @@ function renderOverview() {
       <button type="button" class="btn btn-primary" id="btn-add-item">+ Přidat věc</button>
     </div>
     ${renderItemList(items)}
+    ${deletableCount > 0 ? `
+      <div class="list-footer">
+        <button type="button" class="btn-link btn-link-danger" id="btn-cleanup">Smazat staré prodeje (${deletableCount})</button>
+      </div>` : ''}
   `;
 
   document.getElementById('btn-add-item').addEventListener('click', () => navigate('#/pridat'));
+  const cleanupBtn = document.getElementById('btn-cleanup');
+  if (cleanupBtn) cleanupBtn.addEventListener('click', () => navigate('#/smazat-prodeje'));
 }
 
 function statusBadge(item) {
@@ -227,6 +236,11 @@ function renderDetail(id) {
       <div class="sold-banner">
         <span>Prodáno ${sale ? `${formatDate(sale.date)} za <strong>${formatKc(sale.amount)}</strong>` : ''}. Historie je uzavřená.</span>
         <button type="button" class="btn-link" id="btn-undo-sale">Vrátit prodej</button>
+      </div>
+      <div class="detail-actions">
+        ${DataStore.canDelete(item)
+          ? '<button type="button" class="btn btn-danger-outline" id="btn-delete-item">Smazat věc</button>'
+          : `<p class="form-hint">Smazat věc půjde od ${formatDate(DataStore.deletableFrom(item))}.</p>`}
       </div>`}
     <div class="section-head">
       <h2>Historie</h2>
@@ -253,6 +267,29 @@ function renderDetail(id) {
         render();
       });
     });
+
+    const deleteBtn = document.getElementById('btn-delete-item');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => {
+        confirmDialog({
+          title: 'Smazat věc?',
+          message: `Opravdu smazat <strong>${escapeHtml(item.name)}</strong> i celou její historii? Tuto akci nejde vrátit.`,
+          confirmText: 'Smazat',
+          cancelText: 'Ponechat',
+          danger: true,
+        }).then((ok) => {
+          if (!ok) return;
+          try {
+            DataStore.deleteItems([item.id]);
+          } catch (err) {
+            console.error(err);
+            alert('Věc se nepodařilo smazat.');
+            return render();
+          }
+          navigate('#/');
+        });
+      });
+    }
     return;
   }
 
@@ -584,6 +621,82 @@ function renderSell(id) {
       return;
     }
     navigate(itemHash(item.id));
+  });
+}
+
+// ---------- Obrazovka: Smazat staré prodeje ----------
+
+function renderCleanup() {
+  const candidates = DataStore.getItems()
+    .filter(DataStore.canDelete)
+    .map((item) => ({ item, sale: item.entries.find((e) => e.type === 'prodej') }))
+    .sort((a, b) => a.sale.date.localeCompare(b.sale.date));
+
+  if (candidates.length === 0) return navigate('#/');
+
+  app.innerHTML = `
+    <a class="back-link" href="#/">← Přehled</a>
+    <h2 class="page-title">Smazat staré prodeje</h2>
+    <p class="form-hint page-hint">Věci prodané před 30 a více dny. Vybrané věci se smažou i s celou historií a nepůjdou obnovit.</p>
+    <form id="cleanup-form" novalidate>
+      <ul class="check-list">
+        ${candidates.map(({ item, sale }) => {
+          const result = computeTotals(item.entries).result;
+          return `
+            <li>
+              <label class="check-row">
+                <input type="checkbox" value="${escapeHtml(item.id)}" checked>
+                <span class="check-main">
+                  <span class="item-name">${escapeHtml(item.name)}</span>
+                  <span class="entry-date">Prodáno ${formatDate(sale.date)}</span>
+                </span>
+                <span class="item-result ${resultClass(result)}">${formatKc(result, { signed: true })}</span>
+              </label>
+            </li>`;
+        }).join('')}
+      </ul>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="btn-cancel">Zrušit</button>
+        <button type="submit" class="btn btn-danger" id="btn-submit"></button>
+      </div>
+    </form>
+  `;
+
+  const form = document.getElementById('cleanup-form');
+  const submit = document.getElementById('btn-submit');
+  const selectedIds = () => [...form.querySelectorAll('input[type=checkbox]:checked')].map((c) => c.value);
+
+  function updateButton() {
+    const n = selectedIds().length;
+    submit.textContent = `Smazat vybrané (${n})`;
+    submit.disabled = n === 0;
+  }
+  form.addEventListener('change', updateButton);
+  updateButton();
+
+  document.getElementById('btn-cancel').addEventListener('click', () => navigate('#/'));
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const ids = selectedIds();
+    if (ids.length === 0) return;
+    confirmDialog({
+      title: 'Smazat vybrané věci?',
+      message: `Opravdu smazat <strong>${ids.length}</strong> ${ids.length === 1 ? 'věc' : ids.length < 5 ? 'věci' : 'věcí'} i s celou historií? Tuto akci nejde vrátit.`,
+      confirmText: 'Smazat',
+      cancelText: 'Ponechat',
+      danger: true,
+    }).then((ok) => {
+      if (!ok) return;
+      try {
+        DataStore.deleteItems(ids);
+      } catch (err) {
+        console.error(err);
+        alert('Věci se nepodařilo smazat.');
+        return render();
+      }
+      navigate('#/');
+    });
   });
 }
 
