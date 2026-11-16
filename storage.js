@@ -64,5 +64,22 @@ const DataStore = (() => {
       save(data);
       return item;
     },
+
+    // Vrátí jednu věc podle ID, nebo null.
+    getItem(id) {
+      return load().items.find((item) => item.id === id) || null;
+    },
+
+    // Přidá k věci záznam (výdaj / příjem). Vrátí přidaný záznam.
+    addEntry(itemId, { type, date, amount }) {
+      const data = load();
+      const item = data.items.find((i) => i.id === itemId);
+      if (!item) throw new Error('Věc nenalezena');
+      if (item.status !== 'owned') throw new Error('K prodané věci nejde přidat záznam');
+      const entry = { id: newId(), type, date, amount };
+      item.entries.push(entry);
+      save(data);
+      return entry;
+    },
   };
 })();

@@ -78,18 +78,25 @@ function navigate(hash) {
 
 function render() {
   const route = location.hash.replace(/^#/, '') || '/';
+  let match;
   if (route === '/pridat') renderAddItem();
+  else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam$/))) renderAddEntry(decodeURIComponent(match[1]));
+  else if ((match = route.match(/^\/vec\/([^/]+)$/))) renderDetail(decodeURIComponent(match[1]));
   else renderOverview();
   window.scrollTo(0, 0);
+}
+
+function itemHash(id, suffix = '') {
+  return `#/vec/${encodeURIComponent(id)}${suffix}`;
 }
 
 window.addEventListener('hashchange', render);
 
 // ---------- Obrazovka: Přehled ----------
 
-function renderSummary(totals) {
+function renderSummary(totals, label = 'Celkový souhrn') {
   return `
-    <section class="summary" aria-label="Celkový souhrn">
+    <section class="summary" aria-label="${escapeHtml(label)}">
       <div class="summary-card summary-result">
         <div class="summary-label">Výsledek</div>
         <div class="summary-value ${resultClass(totals.result)}">${formatKc(totals.result, { signed: true })}</div>
@@ -110,12 +117,14 @@ function renderItemRow(item) {
   const totals = computeTotals(item.entries);
   const sold = item.status === 'sold';
   return `
-    <li class="item-row${sold ? ' is-sold' : ''}">
-      <div class="item-main">
-        <div class="item-name">${escapeHtml(item.name)}</div>
-        <span class="badge${sold ? ' badge-sold' : ''}">${sold ? 'Prodáno' : 'Vlastním'}</span>
-      </div>
-      <div class="item-result ${resultClass(totals.result)}">${formatKc(totals.result, { signed: true })}</div>
+    <li>
+      <a class="item-row${sold ? ' is-sold' : ''}" href="${itemHash(item.id)}">
+        <div class="item-main">
+          <div class="item-name">${escapeHtml(item.name)}</div>
+          ${statusBadge(item)}
+        </div>
+        <div class="item-result ${resultClass(totals.result)}">${formatKc(totals.result, { signed: true })}</div>
+      </a>
     </li>
   `;
 }
@@ -146,6 +155,135 @@ function renderOverview() {
   `;
 
   document.getElementById('btn-add-item').addEventListener('click', () => navigate('#/pridat'));
+}
+
+function statusBadge(item) {
+  const sold = item.status === 'sold';
+  return `<span class="badge${sold ? ' badge-sold' : ''}">${sold ? 'Prodáno' : 'Vlastním'}</span>`;
+}
+
+function renderNotFound() {
+  app.innerHTML = `
+    <a class="back-link" href="#/">← Přehled</a>
+    <p class="empty">Tato věc neexistuje.</p>
+  `;
+}
+
+// ---------- Obrazovka: Detail věci ----------
+
+const ENTRY_LABELS = { nakup: 'Nákup', vydaj: 'Výdaj', prijem: 'Příjem', prodej: 'Prodej' };
+
+function renderEntryRow(entry) {
+  const isExpense = EXPENSE_TYPES.includes(entry.type);
+  const amount = isExpense ? -entry.amount : entry.amount;
+  return `
+    <li class="entry-row">
+      <div>
+        <div class="entry-type">${ENTRY_LABELS[entry.type] || entry.type}</div>
+        <div class="entry-date">${formatDate(entry.date)}</div>
+      </div>
+      <div class="entry-amount ${resultClass(amount)}">${formatKc(amount, { signed: true })}</div>
+    </li>
+  `;
+}
+
+function renderDetail(id) {
+  const item = DataStore.getItem(id);
+  if (!item) return renderNotFound();
+
+  const totals = computeTotals(item.entries);
+  // Nejnovější nahoře; při stejném datu později přidaný výš.
+  const history = item.entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => b.entry.date.localeCompare(a.entry.date) || b.index - a.index)
+    .map(({ entry }) => entry);
+
+  app.innerHTML = `
+    <a class="back-link" href="#/">← Přehled</a>
+    <div class="detail-head">
+      <h2 class="page-title">${escapeHtml(item.name)}</h2>
+      ${statusBadge(item)}
+    </div>
+    ${item.note ? `<p class="detail-note">${escapeHtml(item.note)}</p>` : ''}
+    ${renderSummary(totals, 'Souhrn věci')}
+    <div class="section-head">
+      <h2>Historie</h2>
+      ${item.status === 'owned' ? '<button type="button" class="btn btn-primary" id="btn-add-entry">+ Přidat záznam</button>' : ''}
+    </div>
+    <ul class="entry-list">${history.map(renderEntryRow).join('')}</ul>
+  `;
+
+  const addBtn = document.getElementById('btn-add-entry');
+  if (addBtn) addBtn.addEventListener('click', () => navigate(itemHash(item.id, '/zaznam')));
+}
+
+// ---------- Obrazovka: Přidat záznam ----------
+
+function renderAddEntry(id) {
+  const item = DataStore.getItem(id);
+  if (!item) return renderNotFound();
+  if (item.status !== 'owned') return navigate(itemHash(id));
+
+  app.innerHTML = `
+    <a class="back-link" href="${itemHash(item.id)}">← ${escapeHtml(item.name)}</a>
+    <h2 class="page-title">Přidat záznam</h2>
+    <form id="entry-form" class="card form" novalidate>
+      <fieldset class="field segmented">
+        <legend>Typ *</legend>
+        <label><input type="radio" name="type" value="vydaj" checked><span>Výdaj</span></label>
+        <label><input type="radio" name="type" value="prijem"><span>Příjem</span></label>
+      </fieldset>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-date">Datum *</label>
+          <input id="f-date" type="date" value="${todayIso()}" max="${todayIso()}">
+          <div class="error" data-for="date"></div>
+        </div>
+        <div class="field">
+          <label for="f-amount">Částka (Kč) *</label>
+          <input id="f-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="např. 800">
+          <div class="error" data-for="amount"></div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="btn-cancel">Zrušit</button>
+        <button type="submit" class="btn btn-primary">Uložit</button>
+      </div>
+    </form>
+  `;
+
+  const form = document.getElementById('entry-form');
+  document.getElementById('btn-cancel').addEventListener('click', () => navigate(itemHash(item.id)));
+  document.getElementById('f-amount').focus();
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const values = {
+      type: form.querySelector('input[name="type"]:checked').value,
+      date: document.getElementById('f-date').value,
+      amount: parseKc(document.getElementById('f-amount').value),
+    };
+
+    const errors = {};
+    if (!values.date) errors.date = 'Vyplň datum.';
+    else if (values.date > todayIso()) errors.date = 'Datum nemůže být v budoucnu.';
+    if (values.amount === null) errors.amount = 'Zadej částku číslem.';
+    else if (values.amount <= 0) errors.amount = 'Částka musí být alespoň 1 Kč.';
+
+    form.querySelectorAll('.error').forEach((el) => {
+      el.textContent = errors[el.dataset.for] || '';
+    });
+    if (Object.keys(errors).length > 0) return;
+
+    try {
+      DataStore.addEntry(item.id, values);
+    } catch (err) {
+      console.error(err);
+      alert('Záznam se nepodařilo uložit. Zkus to prosím znovu.');
+      return;
+    }
+    navigate(itemHash(item.id));
+  });
 }
 
 // ---------- Obrazovka: Přidat věc ----------
