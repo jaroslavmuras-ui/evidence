@@ -258,6 +258,30 @@ a.item-row:focus-visible {
   margin: -12px 0 24px;
 }
 
+.sold-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  background: #eceff3;
+  border-radius: var(--radius);
+  padding: 10px 8px 10px 16px;
+  margin: -12px 0 24px;
+}
+
+.sell-preview {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 1.05rem;
+}
+
+.sell-preview strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .form-hint {
   margin: 0;
   color: var(--text-muted);

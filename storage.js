@@ -127,6 +127,30 @@ const DataStore = (() => {
       return entry;
     },
 
+    // Prodá věc: přidá záznam Prodej a uzavře historii.
+    sellItem(itemId, { date, amount }) {
+      const data = load();
+      const item = data.items.find((i) => i.id === itemId);
+      if (!item) throw new Error('Věc nenalezena');
+      if (item.status !== 'owned') throw new Error('Věc už je prodaná');
+      item.entries.push({ id: newId(), type: 'prodej', date, amount });
+      item.status = 'sold';
+      save(data);
+      return item;
+    },
+
+    // Zruší prodej: odstraní záznam Prodej a věc znovu otevře.
+    undoSale(itemId) {
+      const data = load();
+      const item = data.items.find((i) => i.id === itemId);
+      if (!item) throw new Error('Věc nenalezena');
+      if (item.status !== 'sold') throw new Error('Věc není prodaná');
+      item.entries = item.entries.filter((e) => e.type !== 'prodej');
+      item.status = 'owned';
+      save(data);
+      return item;
+    },
+
     // Smaže výdaj nebo příjem. Nákup a prodej smazat nejde.
     deleteEntry(itemId, entryId) {
       const data = load();

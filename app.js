@@ -83,6 +83,7 @@ function render() {
   else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam$/))) renderEntryForm(decodeURIComponent(match[1]));
   else if ((match = route.match(/^\/vec\/([^/]+)\/zaznam\/([^/]+)$/))) renderEntryForm(decodeURIComponent(match[1]), decodeURIComponent(match[2]));
   else if ((match = route.match(/^\/vec\/([^/]+)\/upravit$/))) renderEditItem(decodeURIComponent(match[1]));
+  else if ((match = route.match(/^\/vec\/([^/]+)\/prodat$/))) renderSell(decodeURIComponent(match[1]));
   else if ((match = route.match(/^\/vec\/([^/]+)$/))) renderDetail(decodeURIComponent(match[1]));
   else renderOverview();
   window.scrollTo(0, 0);
@@ -96,11 +97,11 @@ window.addEventListener('hashchange', render);
 
 // ---------- Obrazovka: Přehled ----------
 
-function renderSummary(totals, label = 'Celkový souhrn') {
+function renderSummary(totals, label = 'Celkový souhrn', resultLabel = 'Výsledek') {
   return `
     <section class="summary" aria-label="${escapeHtml(label)}">
       <div class="summary-card summary-result">
-        <div class="summary-label">Výsledek</div>
+        <div class="summary-label">${escapeHtml(resultLabel)}</div>
         <div class="summary-value ${resultClass(totals.result)}">${formatKc(totals.result, { signed: true })}</div>
       </div>
       <div class="summary-card">
@@ -203,6 +204,7 @@ function renderDetail(id) {
 
   const totals = computeTotals(item.entries);
   const owned = item.status === 'owned';
+  const sale = item.entries.find((e) => e.type === 'prodej');
   // Nejnovější nahoře; při stejném datu později přidaný výš.
   const history = item.entries
     .map((entry, index) => ({ entry, index }))
@@ -216,11 +218,16 @@ function renderDetail(id) {
       ${statusBadge(item)}
     </div>
     ${item.note ? `<p class="detail-note">${escapeHtml(item.note)}</p>` : ''}
-    ${renderSummary(totals, 'Souhrn věci')}
+    ${renderSummary(totals, 'Souhrn věci', owned ? 'Výsledek' : 'Konečný výsledek')}
     ${owned ? `
       <div class="detail-actions">
         <button type="button" class="btn btn-secondary" id="btn-edit-item">Upravit věc</button>
-      </div>` : ''}
+        <button type="button" class="btn btn-secondary" id="btn-sell">Prodat</button>
+      </div>` : `
+      <div class="sold-banner">
+        <span>Prodáno ${sale ? `${formatDate(sale.date)} za <strong>${formatKc(sale.amount)}</strong>` : ''}. Historie je uzavřená.</span>
+        <button type="button" class="btn-link" id="btn-undo-sale">Vrátit prodej</button>
+      </div>`}
     <div class="section-head">
       <h2>Historie</h2>
       ${owned ? '<button type="button" class="btn btn-primary" id="btn-add-entry">+ Přidat záznam</button>' : ''}
@@ -228,10 +235,30 @@ function renderDetail(id) {
     <ul class="entry-list">${history.map((e) => renderEntryRow(e, owned)).join('')}</ul>
   `;
 
-  if (!owned) return;
+  if (!owned) {
+    document.getElementById('btn-undo-sale').addEventListener('click', () => {
+      confirmDialog({
+        title: 'Vrátit prodej?',
+        message: 'Prodej se zruší a věc bude znovu ve stavu <strong>Vlastním</strong>. Záznam o prodeji se z historie odstraní.',
+        confirmText: 'Vrátit prodej',
+        cancelText: 'Ponechat',
+      }).then((ok) => {
+        if (!ok) return;
+        try {
+          DataStore.undoSale(item.id);
+        } catch (err) {
+          console.error(err);
+          alert('Prodej se nepodařilo vrátit.');
+        }
+        render();
+      });
+    });
+    return;
+  }
 
   document.getElementById('btn-add-entry').addEventListener('click', () => navigate(itemHash(item.id, '/zaznam')));
   document.getElementById('btn-edit-item').addEventListener('click', () => navigate(itemHash(item.id, '/upravit')));
+  document.getElementById('btn-sell').addEventListener('click', () => navigate(itemHash(item.id, '/prodat')));
 
   app.querySelectorAll('[data-edit]').forEach((btn) => {
     btn.addEventListener('click', () => navigate(itemHash(item.id, '/zaznam/' + encodeURIComponent(btn.dataset.edit))));
@@ -473,6 +500,87 @@ function renderEditItem(id) {
     } catch (err) {
       console.error(err);
       alert('Změny se nepodařilo uložit. Zkus to prosím znovu.');
+      return;
+    }
+    navigate(itemHash(item.id));
+  });
+}
+
+// ---------- Obrazovka: Prodat věc ----------
+
+function renderSell(id) {
+  const item = DataStore.getItem(id);
+  if (!item) return renderNotFound();
+  if (item.status !== 'owned') return navigate(itemHash(id));
+
+  const before = computeTotals(item.entries);
+  const purchase = item.entries.find((e) => e.type === 'nakup');
+  const minDate = purchase ? purchase.date : '';
+
+  app.innerHTML = `
+    <a class="back-link" href="${itemHash(item.id)}">← ${escapeHtml(item.name)}</a>
+    <h2 class="page-title">Prodat věc</h2>
+    <form id="sell-form" class="card form" novalidate>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-date">Datum prodeje *</label>
+          <input id="f-date" type="date" value="${todayIso()}" min="${minDate}" max="${todayIso()}">
+          <div class="error" data-for="date"></div>
+        </div>
+        <div class="field">
+          <label for="f-amount">Prodejní cena (Kč) *</label>
+          <input id="f-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="např. 2 000">
+          <div class="error" data-for="amount"></div>
+        </div>
+      </div>
+      <div class="sell-preview" id="sell-preview" aria-live="polite"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="btn-cancel">Zrušit</button>
+        <button type="submit" class="btn btn-primary">Potvrdit prodej</button>
+      </div>
+    </form>
+  `;
+
+  const form = document.getElementById('sell-form');
+  const amountInput = document.getElementById('f-amount');
+  const preview = document.getElementById('sell-preview');
+
+  // Náhled konečného výsledku podle zadané ceny.
+  function updatePreview() {
+    const amount = parseKc(amountInput.value);
+    const result = before.result + (amount && amount > 0 ? amount : 0);
+    preview.innerHTML = `Po prodeji budeš celkem na <strong class="${resultClass(result)}">${formatKc(result, { signed: true })}</strong>`;
+  }
+  amountInput.addEventListener('input', updatePreview);
+  updatePreview();
+
+  document.getElementById('btn-cancel').addEventListener('click', () => navigate(itemHash(item.id)));
+  amountInput.focus();
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const values = {
+      date: document.getElementById('f-date').value,
+      amount: parseKc(amountInput.value),
+    };
+
+    const errors = {};
+    if (!values.date) errors.date = 'Vyplň datum prodeje.';
+    else if (values.date > todayIso()) errors.date = 'Datum nemůže být v budoucnu.';
+    else if (minDate && values.date < minDate) errors.date = `Datum prodeje nemůže být před nákupem (${formatDate(minDate)}).`;
+    if (values.amount === null) errors.amount = 'Zadej částku číslem.';
+    else if (values.amount <= 0) errors.amount = 'Částka musí být alespoň 1 Kč.';
+
+    form.querySelectorAll('.error').forEach((el) => {
+      el.textContent = errors[el.dataset.for] || '';
+    });
+    if (Object.keys(errors).length > 0) return;
+
+    try {
+      DataStore.sellItem(item.id, values);
+    } catch (err) {
+      console.error(err);
+      alert('Prodej se nepodařilo uložit. Zkus to prosím znovu.');
       return;
     }
     navigate(itemHash(item.id));
