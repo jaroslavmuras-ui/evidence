@@ -6,7 +6,8 @@
 // {
 //   items: [{
 //     id, name, note, status: 'owned' | 'sold', createdAt,
-//     entries: [{ id, type: 'nakup' | 'vydaj' | 'prijem' | 'prodej', date: 'RRRR-MM-DD', amount: celé kladné Kč }]
+//     entries: [{ id, type: 'nakup' | 'vydaj' | 'prijem' | 'prodej', date: 'RRRR-MM-DD', amount: celé kladné Kč,
+//                 source?: text (jen výdaj a příjem) }]
 //   }]
 // }
 
@@ -65,18 +66,30 @@ const DataStore = (() => {
       return item;
     },
 
+    // Vrátí dříve použité zdroje (bez duplicit, abecedně) pro našeptávání.
+    getSources() {
+      const seen = new Map();
+      for (const item of load().items) {
+        for (const entry of item.entries) {
+          const s = (entry.source || '').trim();
+          if (s && !seen.has(s.toLocaleLowerCase('cs'))) seen.set(s.toLocaleLowerCase('cs'), s);
+        }
+      }
+      return [...seen.values()].sort((a, b) => a.localeCompare(b, 'cs'));
+    },
+
     // Vrátí jednu věc podle ID, nebo null.
     getItem(id) {
       return load().items.find((item) => item.id === id) || null;
     },
 
     // Přidá k věci záznam (výdaj / příjem). Vrátí přidaný záznam.
-    addEntry(itemId, { type, date, amount }) {
+    addEntry(itemId, { type, date, amount, source }) {
       const data = load();
       const item = data.items.find((i) => i.id === itemId);
       if (!item) throw new Error('Věc nenalezena');
       if (item.status !== 'owned') throw new Error('K prodané věci nejde přidat záznam');
-      const entry = { id: newId(), type, date, amount };
+      const entry = { id: newId(), type, date, amount, source: source || '' };
       item.entries.push(entry);
       save(data);
       return entry;

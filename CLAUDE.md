@@ -18,6 +18,7 @@ Zadání je v `SPEC.md`, plán po krocích v `PLAN.md`.
 - Částky jsou vždy **celé koruny**. Zadaná částka s haléři se zaokrouhlí (od 0,50 nahoru).
 - **Nákup** se zadává jen jednou při vytvoření věci, s kontrolní otázkou. Poté jeho cenu ani datum **nejde změnit ani smazat**.
 - Věc jde smazat **až 30 dní po datu prodeje**, jednotlivě i hromadně (hromadně se nabídnou všechny takové věci předem zaškrtnuté). Neprodanou věc smazat nejde vůbec, ani když byla založena omylem.
+- Výdaj a příjem mají nepovinné pole **Zdroj** (volný text, max. 100 znaků) s našeptáváním dříve použitých hodnot. Nákup ani prodej zdroj nemají.
 - Prodej uzavírá věc. Historie je jen pro čtení a jde ji znovu otevřít tlačítkem **Vrátit prodej**. Při novém prodeji se lhůta 30 dní počítá od nového data prodeje.
 
 ## Pravidla spolupráce

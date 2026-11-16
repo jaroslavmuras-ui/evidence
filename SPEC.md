@@ -39,7 +39,7 @@ Aplikace pro jednoho člověka, který si chce hlídat, kolik peněz vložil do 
 ### 3. Detail věci
 - Nahoře název, poznámka a stav (*Vlastním* / *Prodáno*).
 - Tři čísla za tuto věc: **Vloženo**, **Získáno**, **Výsledek**.
-- **Historie:** seznam všech záznamů seřazený podle data. U každého je datum, typ (Výdaj / Příjem / Nákup / Prodej) a částka. Výdaje se zobrazují s mínusem, příjmy s plusem.
+- **Historie:** seznam všech záznamů seřazený podle data. U každého je datum, typ (Výdaj / Příjem / Nákup / Prodej), u výdaje a příjmu případně zdroj („Výdaj · oprava“) a částka. Výdaje se zobrazují s mínusem, příjmy s plusem.
 - Tlačítka (jen dokud je věc ve stavu *Vlastním*):
   - **Přidat záznam**,
   - **Prodat**,
@@ -52,6 +52,7 @@ Aplikace pro jednoho člověka, který si chce hlídat, kolik peněz vložil do 
 - Volba typu: **Výdaj**, nebo **Příjem**.
 - **Datum** (povinné, předvyplněné dnešním dnem).
 - **Částka v Kč** (povinná, vždy kladné číslo; podle typu ji aplikace sama bere jako mínus, nebo plus).
+- **Zdroj** (nepovinný, volný text): o jaký náklad nebo příjem jde, např. *oprava, údržba, příslušenství, pronájem*. Při psaní aplikace našeptává dříve použité hodnoty.
 
 **Pravidlo pro všechny částky:** evidují se jen celé koruny. Když uživatel zadá částku s haléři, aplikace ji zaokrouhlí na celé koruny (od 0,50 nahoru).
 - Tlačítka **Uložit** a **Zrušit**.
@@ -67,7 +68,7 @@ Aplikace pro jednoho člověka, který si chce hlídat, kolik peněz vložil do 
 Aplikace si pamatuje:
 
 - **Věci:** název, poznámka, stav (vlastním / prodáno).
-- **Záznamy u každé věci:** typ (nákup, výdaj, příjem, prodej), datum a částka v Kč.
+- **Záznamy u každé věci:** typ (nákup, výdaj, příjem, prodej), datum, částka v Kč a u výdaje a příjmu nepovinný zdroj.
 
 Všechny součty (vloženo, získáno, výsledek) se vždy dopočítávají ze záznamů, takže jsou pořád aktuální. Data se po zavření aplikace nesmí ztratit.
 
@@ -86,7 +87,7 @@ Všechny součty (vloženo, získáno, výsledek) se vždy dopočítávají ze z
 - Odhad současné tržní hodnoty věcí, které uživatel stále vlastní.
 - Jinou měnu než Kč.
 - Fotky, účtenky a přílohy.
-- Kategorie, štítky, vyhledávání a filtrování.
+- Pevné kategorie, štítky, vyhledávání, filtrování a součty podle zdroje.
 - Záznamy bez částky (samotné poznámky k událostem).
 - Grafy, statistiky v čase a export do Excelu či PDF.
 - Prodej jen části věci. Prodej vždy uzavírá celou věc.

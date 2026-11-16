@@ -217,6 +217,12 @@ a.item-row:focus-visible {
   font-weight: 600;
 }
 
+.entry-source {
+  font-weight: 400;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 .entry-date {
   color: var(--text-muted);
   font-size: 0.875rem;

@@ -28,7 +28,7 @@ Po každém kroku: vyzkoušet → potvrdit → git commit → další krok.
 
 ## Krok 4 – Úpravy záznamů a věci
 - **Upravit věc** (jen název a poznámka).
-- U výdajů a příjmů **Upravit** a **Smazat** (s potvrzením).
+- U výdajů a příjmů **Upravit** (typ, datum, částka, zdroj) a **Smazat** (s potvrzením).
 - Záznam **Nákup** nejde upravit ani smazat.
 
 **Vyzkoušíš:** Opravíš částku u výdaje, smažeš příjem, přejmenuješ věc → čísla se přepočítají. U nákupu nejsou tlačítka pro úpravu ani smazání.

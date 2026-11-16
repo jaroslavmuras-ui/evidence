@@ -179,7 +179,7 @@ function renderEntryRow(entry) {
   return `
     <li class="entry-row">
       <div>
-        <div class="entry-type">${ENTRY_LABELS[entry.type] || entry.type}</div>
+        <div class="entry-type">${ENTRY_LABELS[entry.type] || entry.type}${entry.source ? `<span class="entry-source"> · ${escapeHtml(entry.source)}</span>` : ''}</div>
         <div class="entry-date">${formatDate(entry.date)}</div>
       </div>
       <div class="entry-amount ${resultClass(amount)}">${formatKc(amount, { signed: true })}</div>
@@ -245,6 +245,13 @@ function renderAddEntry(id) {
           <div class="error" data-for="amount"></div>
         </div>
       </div>
+      <div class="field">
+        <label for="f-source">Zdroj</label>
+        <input id="f-source" type="text" maxlength="100" autocomplete="off" list="source-list" placeholder="např. oprava, pronájem">
+        <datalist id="source-list">
+          ${DataStore.getSources().map((s) => `<option value="${escapeHtml(s)}"></option>`).join('')}
+        </datalist>
+      </div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" id="btn-cancel">Zrušit</button>
         <button type="submit" class="btn btn-primary">Uložit</button>
@@ -262,6 +269,7 @@ function renderAddEntry(id) {
       type: form.querySelector('input[name="type"]:checked').value,
       date: document.getElementById('f-date').value,
       amount: parseKc(document.getElementById('f-amount').value),
+      source: document.getElementById('f-source').value.trim(),
     };
 
     const errors = {};
