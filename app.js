@@ -3,8 +3,9 @@
 const kcFormat = new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 0 });
 
 // 12500 -> "12 500 Kč", -3500 -> "−3 500 Kč"
+// Mezi číslem a "Kč" je obyčejná mezera, aby se velké číslo dalo zalomit jen před "Kč".
 function formatKc(amount, { signed = false } = {}) {
-  const abs = kcFormat.format(Math.abs(amount)) + ' Kč';
+  const abs = kcFormat.format(Math.abs(amount)) + ' Kč';
   if (amount < 0) return '−' + abs;
   if (signed && amount > 0) return '+' + abs;
   return abs;

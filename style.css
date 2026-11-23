@@ -60,6 +60,7 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
+  min-width: 0;
 }
 
 .summary-result {
@@ -71,15 +72,22 @@ body {
   font-size: 0.875rem;
 }
 
+/* Velikost čísel se přizpůsobí šířce displeje; při extrémních částkách se číslo zalomí. */
 .summary-value {
-  font-size: 1.5rem;
+  font-size: clamp(1.1rem, 5vw, 1.5rem);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .summary-result .summary-value {
-  font-size: 2.25rem;
+  font-size: clamp(1.75rem, 9vw, 2.25rem);
+}
+
+@media (min-width: 600px) {
+  .summary-result .summary-value {
+    font-size: 1.875rem;
+  }
 }
 
 .positive { color: var(--positive); }
